@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocChat — RAG Chatbot</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .logo { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+  .logo span { color: #6c5ce7; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ccc; display: inline-block; margin-right: 6px;
+  }
+  .status-dot.ready { background: #00b894; }
+  #status-text { font-size: 13px; color: #666; }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ── Sidebar (upload) ── */
+  .sidebar {
+    width: 280px;
+    background: #fff;
+    border-right: 1px solid #e5e5e5;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .sidebar h3 { font-size: 13px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .upload-zone {
+    border: 2px dashed #d0d0d0;
+    border-radius: 10px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: #6c5ce7;
+    background: #f8f7ff;
+  }
+  .upload-zone input[type="file"] { display: none; }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-zone p { font-size: 13px; color: #666; line-height: 1.5; }
+  .upload-zone strong { color: #6c5ce7; font-size: 13px; }
+
+  .upload-btn {
+    width: 100%;
+    padding: 10px;
+    background: #6c5ce7;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .upload-btn:hover { background: #5b4ccc; }
+  .upload-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+  #doc-list { display: flex; flex-direction: column; gap: 8px; }
+  .doc-item {
+    background: #f8f8f8;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .doc-item .doc-name { flex: 1; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc-badge {
+    font-size: 11px; padding: 2px 7px; border-radius: 10px;
+    font-weight: 500; flex-shrink: 0;
+  }
+  .doc-badge.processing { background: #fff3cd; color: #856404; }
+  .doc-badge.ready { background: #d1f0e0; color: #0a6640; }
+
+  /* ── Chat area ── */
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    margin: auto;
+    color: #999;
+  }
+  .empty-state .big-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* Message bubbles */
+  .message { display: flex; gap: 10px; align-items: flex-start; max-width: 720px; }
+  .message.user { flex-direction: row-reverse; align-self: flex-end; }
+  .message.assistant { align-self: flex-start; }
+
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; flex-shrink: 0;
+  }
+  .user .avatar { background: #6c5ce7; color: white; }
+  .assistant .avatar { background: #e8e8e8; color: #555; }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 580px;
+  }
+  .user .bubble { background: #6c5ce7; color: white; border-top-right-radius: 4px; }
+  .assistant .bubble { background: white; border: 1px solid #e5e5e5; border-top-left-radius: 4px; color: #1a1a1a; }
+
+  /* Sources accordion */
+  .sources {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #888;
+  }
+  .sources-toggle {
+    cursor: pointer;
+    color: #6c5ce7;
+    font-size: 12px;
+    font-weight: 500;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .sources-list { margin-top: 8px; display: none; flex-direction: column; gap: 6px; }
+  .sources-list.open { display: flex; }
+  .source-item {
+    background: #f8f8f8;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #555;
+    border-left: 3px solid #6c5ce7;
+  }
+  .source-item strong { color: #333; display: block; margin-bottom: 2px; }
+
+  /* Typing indicator */
+  .typing .bubble { padding: 14px 16px; }
+  .typing-dots { display: flex; gap: 4px; }
+  .typing-dots span {
+    width: 7px; height: 7px; border-radius: 50%; background: #aaa;
+    animation: bounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+  /* Input area */
+  .input-area {
+    background: white;
+    border-top: 1px solid #e5e5e5;
+    padding: 16px 24px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  #question-input {
+    flex: 1;
+    padding: 12px 14px;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+    min-height: 44px;
+    max-height: 120px;
+    line-height: 1.5;
+  }
+  #question-input:focus { border-color: #6c5ce7; }
+  #question-input::placeholder { color: #aaa; }
+
+  #send-btn {
+    padding: 10px 20px;
+    background: #6c5ce7;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  #send-btn:hover { background: #5b4ccc; }
+  #send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* Notification toast */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 12px 18px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    background: #1a1a1a; color: white;
+    transform: translateY(80px); opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 100;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { background: #00b894; }
+  .toast.error { background: #d63031; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Doc<span>Chat</span> — RAG Chatbot</div>
+  <div>
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">Connecting...</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar: upload PDFs -->
+  <aside class="sidebar">
+    <h3>Documents</h3>
+
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="file-input" accept=".pdf" multiple>
+      <div class="upload-icon">📄</div>
+      <p>Drop PDFs here or <strong>click to browse</strong></p>
+      <p style="margin-top:4px;font-size:12px;">Max 10 MB per file</p>
+    </div>
+
+    <button class="upload-btn" id="upload-btn" disabled>Upload & Process</button>
+
+    <h3>Uploaded</h3>
+    <div id="doc-list">
+      <p style="font-size:13px;color:#aaa;">No documents yet</p>
+    </div>
+
+    <div style="margin-top:auto;font-size:12px;color:#aaa;line-height:1.6;border-top:1px solid #eee;padding-top:12px">
+      Built with AWS Bedrock (Claude Haiku + Titan Embeddings) + ChromaDB
+    </div>
+  </aside>
+
+  <!-- Chat area -->
+  <main class="chat-area">
+    <div id="messages">
+      <div class="empty-state" id="empty-state">
+        <div class="big-icon">💬</div>
+        <p>Upload a PDF on the left,<br>then ask anything about it.</p>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea
+        id="question-input"
+        placeholder="Ask a question about your documents..."
+        rows="1"
+      ></textarea>
+      <button id="send-btn" disabled>Ask</button>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Config ────────────────────────────────────────────────────────────────
+// After `cdk deploy`, replace this with the ApiUrl output value
+// Example: "https://abc123.execute-api.us-east-1.amazonaws.com/prod/"
+const API_URL = "YOUR_API_URL_HERE";
+
+// Your S3 bucket name from cdk deploy output
+const BUCKET_NAME = "YOUR_BUCKET_NAME_HERE";
+
+// ─── State ─────────────────────────────────────────────────────────────────
+let selectedFiles = [];
+let isProcessing = false;
+
+// ─── DOM refs ──────────────────────────────────────────────────────────────
+const uploadZone = document.getElementById("upload-zone");
+const fileInput = document.getElementById("file-input");
+const uploadBtn = document.getElementById("upload-btn");
+const docList = document.getElementById("doc-list");
+const messages = document.getElementById("messages");
+const emptyState = document.getElementById("empty-state");
+const questionInput = document.getElementById("question-input");
+const sendBtn = document.getElementById("send-btn");
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+checkHealth();
+
+async function checkHealth() {
+  if (API_URL === "YOUR_API_URL_HERE") {
+    setStatus(false, "Set API_URL in app.js");
+    return;
+  }
+  try {
+    setStatus(true, "Ready");
+    sendBtn.disabled = false;
+    questionInput.disabled = false;
+  } catch {
+    setStatus(false, "Cannot reach API");
+  }
+}
+
+function setStatus(ready, text) {
+  statusDot.className = "status-dot" + (ready ? " ready" : "");
+  statusText.textContent = text;
+}
+
+// ─── File upload ───────────────────────────────────────────────────────────
+uploadZone.addEventListener("click", () => fileInput.click());
+
+uploadZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  uploadZone.classList.add("dragover");
+});
+
+uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+
+uploadZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove("dragover");
+  handleFiles(Array.from(e.dataTransfer.files).filter(f => f.name.endsWith(".pdf")));
+});
+
+fileInput.addEventListener("change", () => handleFiles(Array.from(fileInput.files)));
+
+function handleFiles(files) {
+  selectedFiles = files;
+  uploadBtn.disabled = files.length === 0;
+  uploadBtn.textContent = files.length > 0
+    ? `Upload ${files.length} PDF${files.length > 1 ? "s" : ""}`
+    : "Upload & Process";
+}
+
+uploadBtn.addEventListener("click", async () => {
+  if (!selectedFiles.length) return;
+
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = "Uploading...";
+
+  for (const file of selectedFiles) {
+    addDocToList(file.name, "processing");
+    await uploadToS3(file);
+  }
+
+  selectedFiles = [];
+  fileInput.value = "";
+  uploadBtn.textContent = "Upload & Process";
+  showToast(`Processing ${selectedFiles.length || "PDF(s)"}... takes ~30 seconds`, "success");
+});
+
+async function uploadToS3(file) {
+  // Get presigned URL from your API, then PUT directly to S3
+  // For simplicity in this demo, you can also use the AWS Console to upload
+  // For production: implement a POST /presigned-url endpoint in your Lambda
+  try {
+    const res = await fetch(`${API_URL}presigned-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, contentType: "application/pdf" }),
+    });
+    const { uploadUrl } = await res.json();
+    await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": "application/pdf" },
+    });
+    updateDocStatus(file.name, "ready");
+    showToast(`${file.name} uploaded`, "success");
+  } catch (err) {
+    updateDocStatus(file.name, "error");
+    showToast(`Failed to upload ${file.name}`, "error");
+  }
+}
+
+function addDocToList(filename, status) {
+  const empty = docList.querySelector("p");
+  if (empty) empty.remove();
+
+  const item = document.createElement("div");
+  item.className = "doc-item";
+  item.dataset.filename = filename;
+  item.innerHTML = `
+    <span>📄</span>
+    <span class="doc-name" title="${filename}">${filename}</span>
+    <span class="doc-badge ${status}">${status}</span>
+  `;
+  docList.appendChild(item);
+}
+
+function updateDocStatus(filename, status) {
+  const item = docList.querySelector(`[data-filename="${filename}"]`);
+  if (item) {
+    const badge = item.querySelector(".doc-badge");
+    badge.className = `doc-badge ${status}`;
+    badge.textContent = status;
+  }
+}
+
+// ─── Chat ──────────────────────────────────────────────────────────────────
+questionInput.addEventListener("input", function () {
+  this.style.height = "44px";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+});
+
+questionInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+sendBtn.addEventListener("click", sendMessage);
+
+async function sendMessage() {
+  const question = questionInput.value.trim();
+  if (!question || isProcessing) return;
+
+  isProcessing = true;
+  sendBtn.disabled = true;
+  questionInput.value = "";
+  questionInput.style.height = "44px";
+
+  if (emptyState) emptyState.style.display = "none";
+
+  appendMessage("user", question);
+  const typingEl = appendTyping();
+
+  try {
+    const res = await fetch(`${API_URL}query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, top_k: 4 }),
+    });
+
+    const data = await res.json();
+    typingEl.remove();
+
+    if (res.ok) {
+      appendAssistantMessage(data.answer, data.sources);
+    } else {
+      appendMessage("assistant", `Error: ${data.error || "Something went wrong"}`);
+    }
+  } catch (err) {
+    typingEl.remove();
+    appendMessage("assistant", "Network error — is your API URL configured correctly?");
+  }
+
+  isProcessing = false;
+  sendBtn.disabled = false;
+  questionInput.focus();
+}
+
+function appendMessage(role, text) {
+  const msg = document.createElement("div");
+  msg.className = `message ${role}`;
+
+  const initials = role === "user" ? "You" : "AI";
+  msg.innerHTML = `
+    <div class="avatar">${initials === "You" ? "Y" : "🤖"}</div>
+    <div class="bubble">${escapeHtml(text)}</div>
+  `;
+
+  messages.appendChild(msg);
+  scrollToBottom();
+  return msg;
+}
+
+function appendAssistantMessage(answer, sources) {
+  const msg = document.createElement("div");
+  msg.className = "message assistant";
+
+  const sourcesHtml = sources && sources.length > 0 ? `
+    <div class="sources">
+      <button class="sources-toggle" onclick="toggleSources(this)">
+        📎 ${sources.length} source${sources.length > 1 ? "s" : ""} used — click to view
+      </button>
+      <div class="sources-list">
+        ${sources.map((s, i) => `
+          <div class="source-item">
+            <strong>Source ${i + 1}: ${escapeHtml(s.filename)} (relevance: ${s.relevance_score})</strong>
+            ${escapeHtml(s.preview)}
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  ` : "";
+
+  msg.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div>
+      <div class="bubble">${escapeHtml(answer)}</div>
+      ${sourcesHtml}
+    </div>
+  `;
+
+  messages.appendChild(msg);
+  scrollToBottom();
+}
+
+function toggleSources(btn) {
+  const list = btn.nextElementSibling;
+  list.classList.toggle("open");
+  btn.textContent = list.classList.contains("open")
+    ? "Hide sources"
+    : btn.textContent.replace("Hide", "click to view");
+}
+
+function appendTyping() {
+  const msg = document.createElement("div");
+  msg.className = "message assistant typing";
+  msg.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble">
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+  messages.appendChild(msg);
+  scrollToBottom();
+  return msg;
+}
+
+function scrollToBottom() {
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+}
+
+// ─── Toast ─────────────────────────────────────────────────────────────────
+function showToast(msg, type = "") {
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.className = `toast ${type} show`;
+  setTimeout(() => toast.classList.remove("show"), 3000);
+}
+</script>
+</body>
+</html>
