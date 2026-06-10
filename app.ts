@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
-import { RagStack } from "../lib/rag-stack";
+import { RagStack } from "./rag-stack";
 
 const app = new cdk.App();
 
