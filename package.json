@@ -1,0 +1,22 @@
+{
+  "name": "rag-chatbot-bedrock",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "aws-cdk": "2.x",
+    "typescript": "~5.4.0",
+    "@types/node": "20.x",
+    "source-map-support": "^0.5.21",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.x",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
