@@ -128,7 +128,7 @@ export class RagStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "handler.lambda_handler",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../lambdas/ingestor"),
+        path.join(__dirname, "lambdas/ingestor"),
         {
           bundling: {
             image: lambda.Runtime.PYTHON_3_12.bundlingImage,
@@ -167,7 +167,7 @@ export class RagStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "handler.lambda_handler",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../lambdas/query"),
+        path.join(__dirname, "lambdas/query"),
         {
           bundling: {
             image: lambda.Runtime.PYTHON_3_12.bundlingImage,
